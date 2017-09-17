@@ -36,7 +36,7 @@ class User
         $this->token = $token;
         $this->db = mysqli_connect("localhost", "root", "root", "alpha_panel_bot");             //TODO change to important info
         $this->adsDb = mysqli_connect("localhost", "root", "root", "autoreply");                //TODO change to important info
-        $this->viewBot = mysqli_connect("localhost", "root", "root", "get_sticker_bot");
+        $this->viewBot = mysqli_connect("localhost", "root", "root", "get_sticker_bot");        //TODO change to important info
         mysqli_set_charset($this->db, "utf8mb4");
         mysqli_set_charset($this->adsDb, "utf8mb4");
         $result = mysqli_query($this->db, "SELECT * FROM user WHERE user_id = {$this->user_id}");
@@ -109,6 +109,9 @@ class User
             case "active_ads":
                 $this->activeAdsManager();
                 break;
+            case "old_ads":
+                $this->oldAdsManager();
+                break;
         }
     }
 
@@ -176,6 +179,7 @@ class User
     private function support()
     {
         $this->sendMessage("متن از مسعودی گرفته شود.", []);
+        $this->showMainMenu();
     }
 
     private function activeAdsManager()
@@ -186,7 +190,7 @@ class User
             if ($this->helper_level == NULL)
             {
                 $this->setHelperLevel("menu_asked");
-                $result = mysqli_query($this->adsDb, "SELECT * FROM ads advertisement");
+                $result = mysqli_query($this->adsDb, "SELECT * FROM advertisement");
                 if (@$row = mysqli_fetch_array($result))
                 {
                     $ads = [ [ ["text" => $row['name'] ] ] ];
@@ -195,6 +199,7 @@ class User
                         array_push($ads, [ [ "text" => $row['name']  ] ]);
                     }
                     array_push($ads, [ [ "text" => "بازگشت"  ] ]);
+                    $this->sendMessage("انتخاب کنید.", $ads);
                 }else
                 {
                     $this->sendMessage("تبلیغی یافت نشد.", []);
@@ -208,7 +213,7 @@ class User
                     $this->showMainMenu();
                 else
                 {
-                    $result = mysqli_query($this->db, "SELECT * FROM advertisement WHERE name = '{$this->text}'");
+                    $result = mysqli_query($this->adsDb, "SELECT * FROM advertisement WHERE name = '{$this->text}'");
                     if($row = mysqli_fetch_array($result))
                     {
                         $this->setTemp($row['name']);
@@ -237,19 +242,21 @@ class User
                     if ($row = mysqli_fetch_array($result))
                     {
                         $total = $row['view'];
-                        $view = [$row['view']];
-                        $channel = [$row['owner']];
+                        $view = $row['view'];
+                        $channel = $row['owner'];
                         $text = "آیدی کانال:
                         {$channel}
-                        تعداد بازدید:
-                        {$view}";
+تعداد بازدید:
+                        {$view}\n";
                         while ($row = mysqli_fetch_array($result))
                         {
                             $text .= "آیدی کانال:
                         {$row['owner']}
-                        تعداد بازدید:
-                        {$row['view']}";
+تعداد بازدید:
+                        {$row['view']}\n";
+                            $total = $total + $row['view'];
                         }
+                        $text .= "\nمجموع: \n {$total}";
                         $this->sendMessage($text, []);
                         $this->showMainMenu();
                     }
@@ -285,7 +292,7 @@ class User
                 else
                 {
                     $user_id = $this->update->message->forward_from->id;
-                    if(mysqli_query($this->db, "DELETE FROM active_ads WHERE viewer_id = {$user_id} AND ads_name = {$this->temp}"))
+                    if(mysqli_query($this->db, "DELETE FROM active_ads WHERE viewer_id = {$user_id} AND ads_name = '{$this->temp}'"))
                     {
                         $this->sendMessage("با موفقیت پاک شد.", []);
                         $this->showMainMenu();
@@ -322,8 +329,8 @@ class User
             if ($this->helper_level == NULL)
             {
                 $this->setHelperLevel("menu_asked");
-                $result = mysqli_query($this->adsDb, "SELECT * FROM active_ads WHERE viewer_id = {$this->user_id}");
-                if ($row = mysqli_fetch_array($result))
+                $result = mysqli_query($this->db, "SELECT * FROM active_ads WHERE viewer_id = {$this->user_id}");
+                if (@$row = mysqli_fetch_array($result))
                 {
                     $ads = [ [ ["text" => $row['ads_name'] ] ] ];
                     while ($row = mysqli_fetch_array($result))
@@ -331,6 +338,7 @@ class User
                         array_push($ads, [ [ "text" => $row['ads_name']  ] ]);
                     }
                     array_push($ads, [ [ "text" => "بازگشت"  ] ]);
+                    $this->sendMessage("انتخاب کنید.", $ads);
                 }else
                 {
                     $this->sendMessage("تبلیغی یافت نشد.", []);
@@ -340,25 +348,31 @@ class User
             elseif ($this->helper_level == "menu_asked")
             {
                 $b = 0;
-                if (mysqli_query("SELECT * FROM active_ads WHERE ads_name = '{$this->temp}' AND viewer_id = {$this->user_id}"))
+                $check = mysqli_query($this->db,"SELECT * FROM active_ads WHERE ads_name = '{$this->text}' AND viewer_id = {$this->user_id}");
+                if ($row = mysqli_fetch_array($check))
+                {
                     $b = 1;
-                $result = mysqli_query($this->viewBot, "SELECT * FROM ads WHERE ads_name = '{$this->temp}'");
-                if ($row = mysqli_fetch_array($result) && $b == 1)
+                }
+                $result = mysqli_query($this->viewBot, "SELECT * FROM ads WHERE ads_name = '{$this->text}'");
+                @$row = mysqli_fetch_array($result);
+                if ($row && $b == 1)
                 {
                     $total = $row['view'];
-                    $view = [$row['view']];
-                    $channel = [$row['owner']];
+                    $view = $row['view'];
+                    $channel = $row['owner'];
                     $text = "آیدی کانال:
                         {$channel}
-                        تعداد بازدید:
-                        {$view}";
+تعداد بازدید:
+                        {$view}\n";
                     while ($row = mysqli_fetch_array($result))
                     {
                         $text .= "آیدی کانال:
                         {$row['owner']}
-                        تعداد بازدید:
-                        {$row['view']}";
+تعداد بازدید:
+                        {$row['view']}\n";
+                        $total = $total + $row['view'];
                     }
+                    $text .= "\n مجموع: {$total}";
                     $this->sendMessage($text, []);
                     $this->showMainMenu();
                 }
@@ -373,6 +387,7 @@ class User
 
     private function oldAdsManager()
     {
+        $this->setLevel("old_ads");
         if ($this->type == "admin")
         {
             if ($this->helper_level == NULL)
@@ -402,10 +417,27 @@ class User
             }
             elseif ($this->helper_level == "ads_asked")
             {
+                if ($this->text == "بازگشت")
+                {
+                    $this->showMainMenu();
+                    return;
+                }
                 $result = mysqli_query($this->db, "SELECT * FROM old_ads WHERE ads_name = '{$this->text}'");
                 if ($row = mysqli_fetch_array($result))
                 {
-                    //TODO show ads
+                    $channels = mysqli_query($this->db, "SELECT * FROM old_ads_channels WHERE ads_name = '{$this->text}'");
+                    $text = "";
+                    while ($row = mysqli_fetch_array($channels))
+                    {
+                        $text .= "
+آیدی کانال:
+{$row['channel']}
+  بازدید:
+{$row['view']}
+";
+                    }
+                    $this->sendMessage($text, []);
+                    $this->showMainMenu();
                 }
                 else
                 {
@@ -443,10 +475,27 @@ class User
             }
             elseif ($this->helper_level == "ads_asked")
             {
+                if ($this->text == "بازگشت")
+                {
+                    $this->showMainMenu();
+                    return;
+                }
                 $result = mysqli_query($this->db, "SELECT * FROM old_ads WHERE ads_name = '{$this->text}' AND view_id = {$this->user_id}");
                 if ($row = mysqli_fetch_array($result))
                 {
-                    //TODO show ads
+                    $channels = mysqli_query($this->db, "SELECT * FROM old_ads_channels WHERE ads_name = '{$this->text}'");
+                    $text = "";
+                    while ($row = mysqli_fetch_array($channels))
+                    {
+                        $text .= "
+آیدی کانال:
+{$row['channel']}
+  بازدید:
+{$row['view']}
+";
+                    }
+                    $this->sendMessage($text, []);
+                    $this->showMainMenu();
                 }
                 else
                 {
@@ -463,7 +512,7 @@ class User
         if ($this->type == "admin")
         {
             if ($entry == "start")
-                $this->sendMessage("یا پیام از شخص مورد نظر فوروارد کنید.", [
+                $this->sendMessage("یک پیام از شخص مورد نظر فوروارد کنید.", [
                     [
                         ["text" => "بازگشت"]
                     ]
@@ -481,16 +530,24 @@ class User
     private function userDatabaseManager($user_id)
     {
         if ($this->temp == "remove")
+        {
             $string = "DELETE FROM user WHERE user_id = {$user_id}";
+        }
         elseif ($this->temp == "add")
         {
             $password = rand(1000000, 9999999);
-            $string = "INSERT INTO user (user_id, password,type) VALUES ({$user_id}, {$password}, {$this->helper_level})";
+            $string = "INSERT INTO user (user_id, password,type) VALUES ({$user_id}, {$password}, '{$this->helper_level}')";
         }
-        if(mysqli_query($this->db, $string))
+        if(mysqli_query($this->db, $string) && $user_id != 394438792)
+        {
             $this->sendMessage("با موفقیت انجام شد.", []);
+            if ($this->temp == "add")
+                $this->sendMessage("رمز: \n {$password}", []);
+        }
         else
+        {
             $this->sendMessage("انجام نشد.", []);
+        }
         $this->showMainMenu();
     }
 
@@ -545,7 +602,7 @@ class User
     private function makeCurl($method,$datas=[])    //make and receive requests to bot
     {
         $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL,"https://api.telegram.org/bot{$this->token}/{$method}");    //TODO change to real token
+        curl_setopt($ch, CURLOPT_URL,"https://api.telegram.org/bot{$this->token}/{$method}");
         curl_setopt($ch, CURLOPT_POST, 1);
         curl_setopt($ch, CURLOPT_POSTFIELDS,http_build_query($datas));
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
